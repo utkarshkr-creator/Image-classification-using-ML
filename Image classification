@@ -1,0 +1,191 @@
+from keras.datasets import fashion_mnist
+from tensorflow.keras.utils import to_categorical
+import sklearn
+import numpy as np
+(trainX,trainY),(testX,testY)=fashion_mnist.load_data()
+def load_dataset():
+    (trainX,trainY),(testX,testY)=fashion_mnist.load_data()
+    trainX=trainX.reshape((trainX.shape[0],28,28,1))
+    testX=testX.reshape((testX.shape[0],28,28,1))
+    trainY=to_categorical(trainY)
+    testY=to_categorical(testY)
+    return trainX,trainY,testX,testY
+#trainX,trainY,testX,testY=load_dataset()
+
+seed=9
+from sklearn.model_selection import StratifiedShuffleSplit
+data_split=StratifiedShuffleSplit(test_size=0.08,random_state=seed)
+for train_index,test_index in data_split.split(trainX,trainY):
+    split_data_92, split_data_8 =trainX[train_index],trainX[test_index]
+    split_label_92, split_label_8=trainY[train_index],trainY[test_index]
+train_test_split=StratifiedShuffleSplit(test_size=0.3,random_state=seed)
+
+#traing and data splitting
+for train_index, test_index in train_test_split.split(split_data_8,split_label_8):
+    train_data_70, test_data_30= split_data_8[train_index],split_data_8[test_index]
+    train_label_70,test_label_30= split_label_8[train_index],split_label_8[test_index]
+train_data=train_data_70
+train_labels=train_label_70
+test_data=test_data_30
+test_labels=test_label_30
+print('train_data: ',train_data.shape)
+print('train_labels: ',train_labels.shape)
+print('test_data: ',test_data.shape)
+print('test_labels: ',test_labels.shape)
+#Normalization
+def normalize(data,eps=1e-8):
+    data-= data.mean(axis=(0,1,2),keepdims=True)
+    std=np.sqrt(data.var(axis=(0,1,2),ddof=1,keepdims=True))
+    std[std<eps]=1.
+    data/=std
+    return data
+print(train_data.shape)
+train_data=train_data.astype('float64')
+test_data=test_data.astype('float64')
+test_labels=test_labels.astype('float64')
+train_data_x=normalize(test_data)
+print('train_data_x: ',train_data.shape)
+print('test_data: ',test_data.shape)
+#ZCA whitening
+#computing whitening matrix
+train_data_flat=train_data.reshape(train_data.shape[0],-1).T
+test_data_flat=test_data.reshape(test_data.shape[0],-1).T
+print('train_data_flat: ',train_data_flat.shape)
+print('test_data_flat: ',test_data_flat.shape)
+
+train_data_flat_t=train_data_flat.T
+test_data_flat_t=test_data_flat.T
+
+#PCA
+from sklearn.decomposition import PCA
+#n_components specify the no. of components to keep
+train_data_pca=PCA(n_components=784, random_state=0, svd_solver='randomized').fit_transform(train_data_flat_t)
+test_data_pca=PCA(n_components=784, random_state=0, svd_solver='randomized').fit_transform(test_data_flat_t)
+print("pca",train_data_pca.shape)
+print("pca",test_data_pca.shape)
+#train_data_pca=train_data_pca.T
+#test_data_pca=test_data_pca.T
+len("len of pca",train_data_pca)
+
+
+#SVD
+from skimage import color
+def svdFeatures(input_data):
+    svdArray_input_data=[]
+    size=input_data.shape[0]
+    for i in range(0,size):
+        img=color.rgb2gray(input_data[i])
+        U,s,V=np.linalg.svd(img,full_matrices=False);
+        S=[s[i] for i in range(28)]
+        svdArray_input_data.append(s)
+        svdMatrix_input_data=np.matrix(svdArray_input_data)
+    return svdMatrix_input_data
+train_data_svd=svdFeatures(train_data)
+test_data_svd=svdFeatures(test_data)
+print("svd",train_data_svd.shape)
+print("svd",test_data_svd.shape)
+
+#training using naive bayes on zca whiteninig
+from sklearn.naive_bayes import GaussianNB
+gnb=GaussianNB()
+train=gnb.fit(train_data_flat_t,train_labels)
+#prediction
+y_pred=gnb.predict(test_data_flat_t)
+score=gnb.score(test_data_flat_t,test_labels)
+print("naive score on zca",score)
+
+#naive on svd data set
+from sklearn.naive_bayes import GaussianNB
+gnb=GaussianNB()
+train=gnb.fit(train_data_svd,train_labels)
+
+#prediction
+y_pred=gnb.predict(test_data_svd)
+score=gnb.score(test_data_svd,test_labels)
+print("naive score on svd",score)
+
+#naive on pca data set
+gnb=GaussianNB()
+train=gnb.fit(train_data_pca,train_labels)
+
+#prediction
+y_pred=gnb.predict(test_data_pca)
+score=gnb.score(test_data_pca,test_labels)
+print("naive score on pca",score)
+
+
+#SVM on zca whitenining data set
+from sklearn import svm         #creating a svm classifier model
+clf=svm.SVC(gamma=.001,probability=True)   #model training
+clf.fit(train_data_flat_t,train_labels)
+predicted=clf.predict(test_data_flat_t)
+score=clf.score(test_data_flat_t,test_labels)  #score
+print("svm score on zca",score)
+
+#svm on svd preprocess data set
+clf=svm.SVC(gamma=.01,probability=True)
+clf.fit(train_data_svd,train_labels)
+#prediction
+predicted=clf.predict(test_data_svd)
+score=clf.score(test_data_svd,test_labels)
+print("svm score on svd",score)
+
+#svm on pca data set
+clf=svm.SVC(gamma=.01,probability=True)
+clf.fit(train_data_pca,train_labels)
+
+#prediction
+predicted=clf.predict(test_data_pca)
+score=clf.score(test_data_pca,test_labels)
+print("svm score on pca",score)
+
+#MLP on zca whitenining preprocess data set
+from sklearn.neural_network import MLPClassifier
+from sklearn import metrics
+MLP=MLPClassifier()
+MLP.fit(train_data_flat_t,train_labels)
+
+#prediction
+mlp_predict=MLP.predict(test_data_flat_t)
+score=MLP.score(test_data_flat_t,test_labels)
+print("mlp score on zca",score)
+
+#MLP on PCA data set
+MLP=MLPClassifier()
+MLP.fit(train_data_pca,train_labels)
+#prediction
+mlp_predict=MLP.predict(test_data_pca)
+score=MLP.score(test_data_pca,test_labels)
+print("mlp score on pca",score)
+
+MLP=MLPClassifier()
+MLP.fit(train_data_svd,train_labels)
+#prediction
+mlp_predict=MLP.predict(test_data_svd)
+score=MLP.score(test_data_svd,test_labels)
+print("mpl score on pca",score)
+
+#confusion matrix
+from sklearn import metrics
+conf_matrix=metrics.confusion_matrix(test_labels,predicted)
+print("conf_matrix",conf_matrix)
+
+#classification accuracy
+accuracy=[]
+leng=len(conf_matrix) #finding the  length of confusion matrix
+for i in range(leng):
+    #each diagonal element(conf_matrix[i,i]) is divied by the sum of the elements of that particular row (conf_matrix[i].sum()).
+    ac=(conf_matrix[i,i]/((conf_matrix[i].sum())+0.0000001))*100
+    accuracy.append(ac)
+print("classification accuracy",accuracy)
+
+#overall accuracy
+summation=0
+no_of_classes=10
+for i in range(0,len(accuracy)):
+    summation+=accuracy[i]
+overall_accuracy=summation/no_of_classes
+print("overall accuracy:",overall_accuracy)
+
+
+
