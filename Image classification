@@ -1,4 +1,3 @@
-#image classification using machine lerning 
 from keras.datasets import fashion_mnist
 from tensorflow.keras.utils import to_categorical
 import sklearn
@@ -66,7 +65,8 @@ print("pca",train_data_pca.shape)
 print("pca",test_data_pca.shape)
 #train_data_pca=train_data_pca.T
 #test_data_pca=test_data_pca.T
-len("len of pca",train_data_pca)
+print("len of pca",len(train_data_pca))
+
 
 
 #SVD
